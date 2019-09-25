@@ -62,7 +62,7 @@ library(MASS)
 library(ggplot2)
 library(dplyr)
 library(ggfortify)
-
+library(glmnet)
 
 #Mauna Loa CO2 concentrations
 data(airquality)
@@ -72,8 +72,13 @@ data(airquality)
 1. Split data into training and test set (75% in train set, 25% in test set)
 
 ```{r}
-#train_regression = 
-#test_regression = 
+#setting seed to reproduce random selection
+set.seed(123)
+train_ind <- sample(seq_len(nrow(airquality)), size = floor(0.75 * nrow(airquality)))
+
+#defining train and test sets
+train <- airquality[train_ind, ]
+test <- airquality[-train_ind, ]
 ```
 
 
@@ -89,23 +94,28 @@ We will predict the response of the Temperature based on Wind.
 
 This is the data we will fit a linear model to. 
 ```{r}
-# ggplot(data = train_regression) +
-#   geom_point(aes(x=Wind, y=Temp)) +
-#   theme_bw()
+ggplot(data = train) +
+   geom_point(aes(x=Wind, y=Temp)) +
+   theme_bw()
 ```
 
 2. Create and fit a linear model to predict Temperature from Wind using the training set
 
 ```{r}
-#help(train)
+help(train)
 
-#linear_regression <- train( ~ , data= , method = "lm")
+linear_regression <- train(Temp ~ Wind, data = train, method = "lm")
 ```
 
 
 3. Vizualize how your model performed on the train data by plotting the regression line on top of the train data points. 
 ```{r}
+pred <- predict(linear_regression, train)
+pred <- data.frame(pred = pred, Wind = train$Wind)
 
+ggplot(data = pred)+
+  geom_line(aes(x = Wind, y = pred))+
+  geom_point(data = train, aes(x=Wind, y = Temp))
 ```
 
 
@@ -118,34 +128,49 @@ This is the data we will fit a linear model to.
 
 4 a) See how the model performs on the test data
 ```{r}
-#help(predict)
-#linear_predict <- predict(, newdata=)
+help(predict)
+linear_predict <- predict(linear_regression, newdata=test)
 ```
 
 4 b) Look at the residuals. Are they close to zero?
 ```{r}
 #look at the median residual value. Close to zero is best
-#help(summary)
+help(summary)
+summary(linear_regression, newdata=test)
 ```
-
+Median residual is somewhat close to zero, but min and max are not, suggesting that there is quite a bit of variance in the data that is not captured by the model, but that over and underestimation are about equal.
 
 4 c) Plot predicted temperature vs observed temperature. A strong model should show a strong correlation
 ```{r}
-
+#plot of predicted and actual temperature
+plot(linear_predict, test$Temp,
+      xlab="predicted",ylab="actual")
+abline(a=0,b=1)
 ```
 
 4 d) Visualize the predicted values in relation to the real data points. Look for homoscedasticity
 ```{r}
 # Extract coefficients from the model
+coeff <- summary(linear_regression)$coefficients
+coeff
 
 # plot the regression line on the predicted values
+pred_test <- predict(linear_regression, test)
+pred_test <- data.frame(pred = pred_test, Wind = test$Wind)
+
+ggplot(data = pred_test)+
+  geom_line(aes(x = Wind, y = pred))+
+  geom_point(data = pred_test, aes(x=Wind, y = pred))
 
 # plot the original test values
-
+ggplot(data = pred)+
+  geom_line(aes(x = Wind, y = pred))+
+  geom_point(data = test, aes(x=Wind, y = Temp))
 ```
 
 4 e) Residuals should be normally distributed. Plot the density of the residuals
 ```{r}
+plot(density(resid(linear_regression)))
 #residuals_lin <- residuals(linear_regression)
 
 #ggplot(data=residvpredict) +
@@ -155,7 +180,7 @@ This is the data we will fit a linear model to.
 
 4 f) Independent variables and residuals should not be correlated
 ```{r}
-#cor.test(train_regression$Wind, resid(linear_regression))
+cor.test(train$Wind, resid(linear_regression))
 ```
 
 
@@ -163,5 +188,35 @@ This is the data we will fit a linear model to.
 
 5. Create a linear model using L1 or L2 regularization to predict Temperature from Wind and Month variables. Plot your predicted values and the real Y values on the same plot. 
 
+```{r}
+#subsetting data for variables of interest
+airquality_month <- airquality[c(3:5)]
+
+#setting seed to reproduce random selection
+set.seed(123)
+train_ind_month <- sample(seq_len(nrow(airquality_month)), size = floor(0.75 * nrow(airquality_month)))
+
+#defining train and test sets
+train_month <- airquality_month[train_ind_month, ]
+test_month <- airquality_month[-train_ind_month, ]
+
+#defining preditor and prediction variables
+x <- model.matrix(Temp ~ ., train_month)[,-1]
+y <- train_month$Temp
+
+#finding the best lamda
+set.seed(123) 
+cv <- cv.glmnet(x, y, alpha = 0)
+
+#fitting model to training data
+ridge_regression <- glmnet(x, y, alpha = 0, lambda = cv$lambda.min)
+#using model to predict on test data
+ridge_regression_test <- model.matrix(Temp ~., test_month)[,-1]
+predictions <- ridge_regression %>% predict(ridge_regression_test)
+
+#plotting predicted temp and actual temp
+plot(predictions, test_month$Temp,
+      xlab="Predicted Temperature",ylab="Actual Temperature")
+```
 
 
