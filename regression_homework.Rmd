@@ -163,9 +163,12 @@ ggplot(data = pred_test)+
   geom_point(data = pred_test, aes(x=Wind, y = pred))
 
 # plot the original test values
-ggplot(data = pred)+
-  geom_line(aes(x = Wind, y = pred))+
-  geom_point(data = test, aes(x=Wind, y = Temp))
+resid <- ggplot()+
+  geom_point(aes(pred_test$Wind, pred_test$pred, col = "Predicted Temperature"))+
+  geom_point(aes(test$Wind, test$Temp, col = "Actual Temperature"))+
+  geom_segment(aes(x=pred_test$Wind, y=linear_predict, xend = test$Wind, yend = test$Temp))
+
+resid + labs(title="Prediction vs Actual Temperature Residuals", x ="Wind", y = "Temperature")
 ```
 
 4 e) Residuals should be normally distributed. Plot the density of the residuals
